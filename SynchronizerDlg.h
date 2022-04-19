@@ -35,4 +35,5 @@ public:
 	afx_msg void OnEnChangeEditmain();
 	CEdit EditMain;
 	CString TextMain;
+	afx_msg void OnBnClickedButton1();
 };

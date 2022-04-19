@@ -28,7 +28,7 @@ CSynchronizerDlg::CSynchronizerDlg(CWnd* pParent /*=nullptr*/)
 void CSynchronizerDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
-	DDX_Control(pDX, IDC_EDITMAIN, EditMain);
+	DDX_Control(pDX, IDC_EDITMAIN, EditMain); // Текстовое поле
 	DDX_Text(pDX, IDC_EDITMAIN, TextMain);
 	DDX_Control(pDX, IDC_EDITMAIN, EditMain);
 	DDX_Text(pDX, IDC_EDITMAIN, TextMain);
@@ -38,6 +38,7 @@ BEGIN_MESSAGE_MAP(CSynchronizerDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_EN_CHANGE(IDC_EDITMAIN, &CSynchronizerDlg::OnEnChangeEditmain)
+	ON_BN_CLICKED(IDC_BUTTON1, &CSynchronizerDlg::OnBnClickedButton1)
 END_MESSAGE_MAP()
 
 
@@ -55,32 +56,32 @@ BOOL CSynchronizerDlg::OnInitDialog()
 
 	hwnd = CWnd::GetSafeHwnd();
 
-	StartEvent = CreateEvent(NULL, TRUE, TRUE, Event1Name);
-	EditEvent = CreateEvent(NULL, TRUE, FALSE, Event2Name);
-	ExitEvent = CreateEvent(NULL, FALSE, FALSE, Event3Name);
+	StartEvent = CreateEvent(NULL, TRUE, TRUE, Event1Name); // _, сброс вручную, начальное свободное состояние собития, _, возвращает описатель процесса
+	EditEvent = CreateEvent(NULL, TRUE, FALSE, Event2Name); // сброс вручную, занятое состояние
+	ExitEvent = CreateEvent(NULL, FALSE, FALSE, Event3Name); // автосброс, занятое состояние
 	Events[0] = EditEvent;
 	Events[1] = ExitEvent;
 
-	if (WaitForSingleObject(StartEvent, 0) == WAIT_OBJECT_0) {
+	if (WaitForSingleObject(StartEvent, 0) == WAIT_OBJECT_0) { // Если поток StartEvent завершил работу
 		IsMain = true;
 
-		ResetEvent(StartEvent);
+		ResetEvent(StartEvent); // Меняем состояние на занятое
 	}
 	else {
 		IsMain = false;
 
-		PrintWaitingThread = CreateThread(NULL, 0, PrintText, &EditMain, 0, NULL);
+		PrintWaitingThread = CreateThread(NULL, 0, PrintText, &EditMain, 0, NULL); // Создаем поток
 
-		EditMain.SetReadOnly();
+		EditMain.SetReadOnly(); // Только чтение
 	}
 
-	HANDLE fileMap = CreateFileMappingA(NULL, NULL, PAGE_READWRITE, 0, BUFFERSIZE, FileMapName);
+	HANDLE fileMap = CreateFileMappingA(NULL, NULL, PAGE_READWRITE, 0, BUFFERSIZE, FileMapName); // Защиты нет, 
 	if (fileMap == NULL) {
 		AfxMessageBox(L"Ошибка создания FileMap. Код ошибки: " + GetLastError());
 		return FALSE;
 	}
 
-	TextInMemory = (wchar_t*)MapViewOfFile(fileMap, FILE_MAP_ALL_ACCESS, 0, 0, BUFFERSIZE);
+	TextInMemory = (wchar_t*)MapViewOfFile(fileMap, FILE_MAP_ALL_ACCESS, 0, 0, BUFFERSIZE); // какой файл, доступ с чтением/записи, число отображаемых байтов
 	if (TextInMemory == NULL) {
 		AfxMessageBox(L"Не получилось просмотреть FileMap. Код ошибки:  " + GetLastError());
 		return FALSE;
@@ -129,10 +130,10 @@ DWORD WINAPI PrintText(LPVOID param) {
 
 	while (true)
 	{
-		int index = WaitForMultipleObjects(2, Events, FALSE, INFINITE) - WAIT_OBJECT_0;
+		int index = WaitForMultipleObjects(2, Events, FALSE, INFINITE) - WAIT_OBJECT_0; // 2 объекта, указатель на массив, не ждать все объекты, бесконечно
 
-		if (index == 0) {
-			SetWindowTextW(GetDlgItem(hwnd, IDC_EDITMAIN), TextInMemory);
+		if (index == 0) { // Если один из потоков завершился
+			SetWindowTextW(GetDlgItem(hwnd, IDC_EDITMAIN), TextInMemory); // Извлекаем дескриптор органа управления в заданном диалоговом окне
 		}
 		else {
 			IsMain = true;
@@ -147,18 +148,28 @@ DWORD WINAPI PrintText(LPVOID param) {
 
 void CSynchronizerDlg::OnEnChangeEditmain()
 {
-	UpdateData();
+	
+	if (IsMain) {
+		UpdateData();
 
-	wcscpy(TextInMemory, TextMain);
+		wcscpy(TextInMemory, TextMain); // Копируем из TextMain в TextInMemory
 
-	PulseEvent(EditEvent);
+		PulseEvent(EditEvent);
+	}
+	// wcscpy(TextInMemory, TextMain); // Копируем из TextMain в TextInMemory
+
+	// PulseEvent(EditEvent); // был сброс вручную, занятое состояние, все ждущие потоки просыпаются
 }
 
-void CSynchronizerDlg::OnClose()
+
+
+void CSynchronizerDlg::OnBnClickedButton1()
 {
+	// TODO: добавьте свой код обработчика уведомлений
 	if (IsMain) {
-		SetEvent(ExitEvent);
+		SetEvent(ExitEvent); // Меняем на свободное состояние
 	}
 
 	EndDialog(IDOK);
+	CDialog::OnCancel();
 }
